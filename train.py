@@ -45,6 +45,8 @@ opt.log_path = os.path.join('ckpt_fs', 'train_logs.txt')
 print(opt)
 
 def main():
+    device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
+
     ###### Definition of variables ######
     # Networks
     netG_1 = ConGenerator_S2F()
@@ -56,6 +58,16 @@ def main():
     netG_1.apply(weights_init_normal)
     netG_2.apply(weights_init_normal)
 
+    last_epoch = 3
+    checkpoint_G_1 = torch.load('ckpt_fs/netG_1_%d.pth' % (last_epoch), map_location=device)
+    checkpoint_G_2 = torch.load('ckpt_fs/netG_2_%d.pth' % (last_epoch), map_location=device)
+    netG_1.load_state_dict(checkpoint_G_1)
+    netG_2.load_state_dict(checkpoint_G_2)
+    opt.epoch = last_epoch
+
+    print("------------------------------------------------------")
+    print("Successfully loaded SG-ShadowNet: ", opt.epoch)
+    print("------------------------------------------------------")
 
     # Lossess
     # criterion_GAN = torch.nn.MSELoss()  # lsgan
@@ -85,7 +97,6 @@ def main():
     opts["cuda_device"] = "cuda:0"
     load_size = 20
     train_loader = dataset_loader.load_shadow_train_dataset(rgb_dir_ws, rgb_dir_ns, ws_istd, ns_istd, load_size, opts=opts)
-    device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
 
     # Dataset loader
     # dataloader = DataLoader(ImageDataset(opt.dataroot, unaligned=True),batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
