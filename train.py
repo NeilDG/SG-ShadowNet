@@ -23,11 +23,11 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
-parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
+parser.add_argument('--n_epochs', type=int, default=20, help='number of epochs of training') #default 200
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
-parser.add_argument('--decay_epoch', type=int, default=50,
-                    help='epoch to start linearly decaying the learning rate to 0')
+parser.add_argument('--decay_epoch', type=int, default=10,
+                    help='epoch to start linearly decaying the learning rate to 0') #default 50
 parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
 parser.add_argument('--iter_loss', type=int, default=100, help='average loss for n iterations')
 opt = parser.parse_args()
@@ -80,10 +80,10 @@ def main():
     mask_istd = "X:/ISTD_Dataset/test/test_B/*.png"
 
     opts = {}
-    opts["img_to_load"] = -1
+    opts["img_to_load"] = 10000
     opts["num_workers"] = 6
     opts["cuda_device"] = "cuda:0"
-    load_size = 16
+    load_size = 20
     train_loader = dataset_loader.load_shadow_train_dataset(rgb_dir_ws, rgb_dir_ns, ws_istd, ns_istd, load_size, opts=opts)
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
 
@@ -101,7 +101,7 @@ def main():
     for epoch in range(opt.epoch, opt.n_epochs):
         netG_1.train()
         netG_2.train()
-        for i, (_, rgb_ws, rgb_ns, shadow_map, shadow_matte) in enumerate(train_loader, 0):
+        for i, (file_name, rgb_ws, rgb_ns, shadow_map, shadow_matte) in enumerate(train_loader, 0):
         # for i, (s, sgt,mask,mask50) in enumerate(dataloader):
             # Set model input
             # s = s.cuda()
@@ -151,12 +151,13 @@ def main():
                 print(avg_log)
                 open(opt.log_path, 'a').write(avg_log + '\n')
 
-                slabimage=fake_sf_temp.data
-                outputimagerealsr = tensor2img(slabimage)
-                io.imsave('./ckpt_fs/fake_temp.png', (outputimagerealsr*255).astype(np.uint8))
                 slabimage=output.data
-                outputimagerealsr = tensor2img(slabimage)
-                io.imsave('./ckpt_fs/fake.png', (outputimagerealsr*255).astype(np.uint8))
+                save_dir="./ckpt_fs/"
+                impath = save_dir + file_name[0] + ".png"
+                torchvision.utils.save_image(slabimage[0], impath, normalize=True)
+
+                torch.save(netG_1.state_dict(), ('ckpt_fs/netG_1_%d.pth' % (epoch + 1)))
+                torch.save(netG_2.state_dict(), ('ckpt_fs/netG_2_%d.pth' % (epoch + 1)))
 
         # Update learning rates
         lr_scheduler_G.step()

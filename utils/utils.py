@@ -36,7 +36,8 @@ def tensor2img(tensor, h=480, w=640):
     labimg = labimg.data.squeeze(0).cpu()
     labimg = labimg.transpose(0, 2).transpose(0, 1).contiguous().numpy()
     labimg = resize(labimg,(h,w,3))
-    outputimag = color.lab2rgb(labimg)
+    # outputimag = color.lab2rgb(labimg)
+    outputimag = labimg
     return outputimag
 
 def calc_RMSE(real_img, fake_img):
