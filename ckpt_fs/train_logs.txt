@@ -1,0 +1,2 @@
+Namespace(epoch=0, n_epochs=200, batchSize=1, lr=0.0002, decay_epoch=50, n_cpu=8, iter_loss=100, dataroot='input/dataset/ISTD', log_path='ckpt_fs\\train_logs.txt')
+
