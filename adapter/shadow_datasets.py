@@ -69,7 +69,7 @@ class ShadowISTDDataset(data.Dataset):
         self.transform_config = transform_config
 
         self.shadow_op = shadow_map_transforms.ShadowMapTransforms()
-        self.norm_op = transforms.Normalize((0.5, ), (0.5, ))
+        # self.norm_op = transforms.Normalize((0.5, ), (0.5, ))
 
         self.initial_op = transforms.Compose([
             transforms.ToPILImage(),
@@ -119,7 +119,7 @@ class ShadowSRDDataset(data.Dataset):
         self.transform_config = transform_config
 
         self.shadow_op = shadow_map_transforms.ShadowMapTransforms()
-        self.norm_op = transforms.Normalize((0.5, ), (0.5, ))
+        # self.norm_op = transforms.Normalize((0.5, ), (0.5, ))
 
         self.initial_op = transforms.Compose([
             transforms.ToPILImage(),
