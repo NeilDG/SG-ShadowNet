@@ -76,7 +76,7 @@ def load_istd_dataset(ws_istd_path, ns_istd_path, mask_istd_path, load_size, opt
     data_loader = torch.utils.data.DataLoader(
         shadow_datasets.ShadowISTDDataset(img_length, initial_istd_ws_list, initial_istd_ns_list, initial_istd_mask_list, 1),
         batch_size=load_size,
-        num_workers=int(opts["num_workers"]),
+        num_workers=1,
         shuffle=False,
         pin_memory=True,
         pin_memory_device=opts["cuda_device"]
@@ -99,7 +99,7 @@ def load_srd_dataset(ws_istd_path, ns_istd_path, mask_istd_path, load_size, opts
     data_loader = torch.utils.data.DataLoader(
         shadow_datasets.ShadowSRDDataset(img_length, initial_istd_ws_list, initial_istd_ns_list, initial_istd_mask_list, 1),
         batch_size=load_size,
-        num_workers=int(opts["num_workers"]),
+        num_workers=1,
         shuffle=False,
         pin_memory=True,
         pin_memory_device=opts["cuda_device"]

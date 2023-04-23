@@ -105,7 +105,7 @@ def main():
 
         fake_sf_temp = netG_1(s, mask)
         fake_sf = (s * inv_mask + fake_sf_temp * mask)
-
+        fake_sf = netG_2(fake_sf, mask)
         results = fake_sf
 
         resize_op = torchvision.transforms.Resize((160, 210), torchvision.transforms.InterpolationMode.BICUBIC)

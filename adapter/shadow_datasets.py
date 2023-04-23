@@ -73,17 +73,20 @@ class ShadowISTDDataset(data.Dataset):
 
         self.initial_op = transforms.Compose([
             transforms.ToPILImage(),
-            transforms.Resize((240, 320)),
+            # transforms.Resize((240, 320)),
+            transforms.Resize((256, 256)),
             transforms.ToTensor()])
 
     def __getitem__(self, idx):
         file_name = self.img_list_a[idx].split("/")[-1].split(".png")[0]
 
         try:
+            state = torch.get_rng_state()
             rgb_ws = cv2.imread(self.img_list_a[idx])
             rgb_ws = cv2.cvtColor(rgb_ws, cv2.COLOR_BGR2RGB)
             rgb_ws = self.initial_op(rgb_ws)
 
+            torch.set_rng_state(state)
             rgb_ns = cv2.imread(self.img_list_b[idx])
             rgb_ns = cv2.cvtColor(rgb_ns, cv2.COLOR_BGR2RGB)
             rgb_ns = self.initial_op(rgb_ns)
@@ -92,18 +95,19 @@ class ShadowISTDDataset(data.Dataset):
             # shadow_mask = cv2.cvtColor(shadow_mask, cv2.COLOR_BGR2GRAY)
             # shadow_mask = self.initial_op(shadow_mask)
 
-            shadow_mask = rgb_ns - rgb_ws
-            shadow_mask = kornia.color.rgb_to_grayscale(shadow_mask)
+            # shadow_mask = rgb_ns - rgb_ws
+            # shadow_mask = kornia.color.rgb_to_grayscale(shadow_mask)
             # shadow_mask = self.initial_op(shadow_mask)
+
+            rgb_ws, rgb_ns, shadow_map, shadow_matte = self.shadow_op.generate_shadow_map(rgb_ws, rgb_ns, False)
+            shadow_mask = self.initial_op(shadow_matte)
 
         except Exception as e:
             print("Failed to load: ", self.img_list_a[idx], self.img_list_b[idx])
             print("ERROR: ", e)
             rgb_ws = None
             rgb_ns = None
-            rgb_ws_gray = None
             shadow_mask = None
-            shadow_matte = None
 
         return file_name, rgb_ws, rgb_ns, shadow_mask
 
@@ -123,9 +127,9 @@ class ShadowSRDDataset(data.Dataset):
 
         self.initial_op = transforms.Compose([
             transforms.ToPILImage(),
-            # transforms.Resize(constants.TEST_IMAGE_SIZE),
+            transforms.Resize((256, 256)),
             # transforms.Resize((160, 210)),
-            transforms.Resize((240, 320)),
+            # transforms.Resize((240, 320)),
             transforms.ToTensor()])
 
     def __getitem__(self, idx):
@@ -144,9 +148,12 @@ class ShadowSRDDataset(data.Dataset):
             # shadow_mask = cv2.cvtColor(shadow_mask, cv2.COLOR_BGR2GRAY)
             # shadow_mask = self.initial_op(shadow_mask)
 
-            shadow_mask = rgb_ns - rgb_ws
-            shadow_mask = kornia.color.rgb_to_grayscale(shadow_mask)
+            # shadow_mask = rgb_ns - rgb_ws
+            # shadow_mask = kornia.color.rgb_to_grayscale(shadow_mask)
             # shadow_mask = self.initial_op(shadow_mask)
+
+            rgb_ws, rgb_ns, shadow_map, shadow_matte = self.shadow_op.generate_shadow_map(rgb_ws, rgb_ns, False)
+            shadow_mask = self.initial_op(shadow_matte)
 
         except Exception as e:
             print("Failed to load: ", self.img_list_a[idx], self.img_list_b[idx])

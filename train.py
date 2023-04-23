@@ -4,8 +4,11 @@ import datetime
 import argparse
 import itertools
 import torchvision
+import yaml
+from torch import nn
 from torch.utils.data import DataLoader
 import torch
+from yaml import SafeLoader
 
 from adapter import dataset_loader
 from utils.utils import LambdaLR
@@ -23,7 +26,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
-parser.add_argument('--n_epochs', type=int, default=20, help='number of epochs of training') #default 200
+parser.add_argument('--n_epochs', type=int, default=30, help='number of epochs of training') #default 200
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
 parser.add_argument('--decay_epoch', type=int, default=10,
@@ -58,12 +61,12 @@ def main():
     netG_1.apply(weights_init_normal)
     netG_2.apply(weights_init_normal)
 
-    last_epoch = 3
-    checkpoint_G_1 = torch.load('ckpt_fs/netG_1_%d.pth' % (last_epoch), map_location=device)
-    checkpoint_G_2 = torch.load('ckpt_fs/netG_2_%d.pth' % (last_epoch), map_location=device)
-    netG_1.load_state_dict(checkpoint_G_1)
-    netG_2.load_state_dict(checkpoint_G_2)
-    opt.epoch = last_epoch
+    # last_epoch = 0
+    # checkpoint_G_1 = torch.load('ckpt_fs/netG_1_%d.pth' % (last_epoch), map_location=device)
+    # checkpoint_G_2 = torch.load('ckpt_fs/netG_2_%d.pth' % (last_epoch), map_location=device)
+    # netG_1.load_state_dict(checkpoint_G_1)
+    # netG_2.load_state_dict(checkpoint_G_2)
+    # opt.epoch = last_epoch
 
     print("------------------------------------------------------")
     print("Successfully loaded SG-ShadowNet: ", opt.epoch)
@@ -91,12 +94,19 @@ def main():
     ns_istd = "X:/ISTD_Dataset/test/test_C/*.png"
     mask_istd = "X:/ISTD_Dataset/test/test_B/*.png"
 
+    ws_srd = "X:/SRD_Test/srd/shadow/*.jpg"
+    ns_srd = "X:/SRD_Test/srd/shadow_free/*.jpg"
+    mask_srd = "X:/SRD_Test/srd/mask_srd/*.jpg"
+
     opts = {}
     opts["img_to_load"] = 10000
-    opts["num_workers"] = 6
+    opts["num_workers"] = 12
     opts["cuda_device"] = "cuda:0"
-    load_size = 20
+    load_size = 10
     train_loader = dataset_loader.load_shadow_train_dataset(rgb_dir_ws, rgb_dir_ns, ws_istd, ns_istd, load_size, opts=opts)
+    test_loader_istd = dataset_loader.load_istd_dataset(ws_istd, ns_istd, mask_istd, load_size, opts)
+    # test_loader_istd = dataset_loader.load_srd_dataset(ws_srd, ns_srd, mask_srd, load_size, opts)
+    # test_loader_srd = dataset_loader.load_srd_dataset(ws_srd, ns_srd, mask_srd, load_size, opts)
 
     # Dataset loader
     # dataloader = DataLoader(ImageDataset(opt.dataroot, unaligned=True),batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
@@ -108,18 +118,26 @@ def main():
 
     open(opt.log_path, 'w').write(str(opt) + '\n\n')
 
+    # plot utils
+    plot_loss_path = "./reports/train_test_loss.yaml"
+    l1_loss = nn.L1Loss()
+    if (os.path.exists(plot_loss_path)):
+        with open(plot_loss_path) as f:
+            losses_dict = yaml.load(f, SafeLoader)
+    else:
+        losses_dict = {}
+        losses_dict["train"] = []
+        losses_dict["test_istd"] = []
+
+    print("Losses dict: ", losses_dict["train"])
+    current_step = 0
+
     ###### Training ######
     for epoch in range(opt.epoch, opt.n_epochs):
         netG_1.train()
         netG_2.train()
         for i, (file_name, rgb_ws, rgb_ns, shadow_map, shadow_matte) in enumerate(train_loader, 0):
-        # for i, (s, sgt,mask,mask50) in enumerate(dataloader):
-            # Set model input
-            # s = s.cuda()
-            # sgt = sgt.cuda()
-            # mask = mask.cuda()
-            # mask50 = mask50.cuda()
-            # inv_mask = (1.0- mask) # non_shadow region mask
+            current_step += 1
             s = rgb_ws.to(device)
             sgt = rgb_ns.to(device)
             mask = shadow_matte.to(device)
@@ -170,44 +188,40 @@ def main():
                 torch.save(netG_1.state_dict(), ('ckpt_fs/netG_1_%d.pth' % (epoch + 1)))
                 torch.save(netG_2.state_dict(), ('ckpt_fs/netG_2_%d.pth' % (epoch + 1)))
 
+            if(current_step % 500 == 0):
+                netG_1.eval()
+                netG_2.eval()
+
+                # plot train-test loss
+                fake_sf_temp = netG_1(s, mask)
+                input2 = (s * inv_mask + fake_sf_temp * mask)
+                rgb_ns_like = netG_2(input2, mask)
+
+                train_loss = float(np.round(l1_loss(rgb_ns_like, sgt).item(), 4))
+                losses_dict["train"].append({current_step: float(train_loss)})
+
+                #test istd
+                _, rgb_ws, rgb_ns, shadow_matte = next(itertools.cycle(test_loader_istd))
+                s = rgb_ws.to(device)
+                sgt = rgb_ns.to(device)
+                mask = shadow_matte.to(device)
+                inv_mask = (1.0 - mask)
+
+                fake_sf_temp = netG_1(s, mask)
+                input2 = (s * inv_mask + fake_sf_temp * mask)
+                rgb_ns_like = netG_2(input2, mask)
+                # rgb_ns_like = fake_sf_temp
+
+                test_loss_istd = float(np.round(l1_loss(rgb_ns_like, sgt).item(), 4))
+                losses_dict["test_istd"].append({current_step: float(test_loss_istd)})
+
+                plot_loss_file = open(plot_loss_path, "w")
+                yaml.dump(losses_dict, plot_loss_file)
+                plot_loss_file.close()
+                print("Dumped train test loss to ", plot_loss_path)
+
         # Update learning rates
         lr_scheduler_G.step()
-
-        # ##### testing ######
-        # if epoch >= 0:
-            # print('-------Start evaluation----------')
-            # print('-------Total %d images ----------'%(len(test_dataloader)))
-            # netG_1.eval()
-            # netG_2.eval()
-            # eval_shadow_rmse = 0
-            # eval_nonshadow_rmse = 0
-            # eval_rmse = 0
-            # for j, (s, sgt, mask) in enumerate(test_dataloader):
-                # s = s.cuda()                # full image shadow
-                # sgt = sgt.cuda()            # full image shadow-free
-                # mask = mask.cuda()          # shadow-mask
-                # inv_mask = 1.0 - mask       # non_shadow region mask
-                # with torch.no_grad():
-                    # fake_sf_temp = netG_1(s, mask)
-                    # input2 = (s * inv_mask + fake_sf_temp * mask)
-                    # fake_sf = netG_2(input2, mask)
-                    # # fake_sf = (s * inv_mask + fake_sf * mask)
-                # mask = mask[0].cpu().float().numpy()[..., None][0, ...]
-                # # evaluation
-                # io.imsave('./ckpt_fs/sgt_val.png',tensor2img(sgt))
-                # io.imsave('./ckpt_fs/fake_sf_val.png',tensor2img(fake_sf))
-                # diff = calc_RMSE(tensor2img(sgt), tensor2img(fake_sf))
-                # shadow_rmse = np.sqrt(1.0 * (np.power(diff, 2) * mask).sum(axis=(0, 1)) / mask.sum())
-                # nonshadow_rmse = np.sqrt(1.0 * (np.power(diff, 2) * (1 - mask)).sum(axis=(0, 1)) / (1 - mask).sum())
-                # whole_rmse = np.sqrt(np.power(diff, 2).mean(axis=(0, 1)))
-
-                # eval_shadow_rmse += shadow_rmse.sum()
-                # eval_nonshadow_rmse += nonshadow_rmse.sum()
-                # eval_rmse += whole_rmse.sum()
-            # eva_log = '[Eval] [Epoch] %d |rmse : %.3f | shadow_rmse : %.3f | nonshadow_rmse : %.3f' % \
-                        # (epoch+1, eval_rmse / len(test_dataloader), eval_shadow_rmse / len(test_dataloader), eval_nonshadow_rmse / len(test_dataloader))
-            # print(eva_log)
-            # open(opt.log_path, 'a').write(eva_log + '\n')
 
         if epoch >= (opt.n_epochs-50):
             torch.save(netG_1.state_dict(), ('ckpt_fs/netG_1_%d.pth' % (epoch + 1)))
